@@ -112,7 +112,7 @@ async function transferSOL(senderPrivateKeyHex, recipientPublicKeyStr, amountSOL
 }
 
 
-
+//测试用的不用管
 // publicKey: '2pkqS8fDtR3vizXJcbVnTfeck2JvYZy3r6wzDH5T9NMv',
 //privateKey: '1762a599b597f0c6b2cc0cac9fda0f8c6424abbd3fd0490790b0bbdc56f4cb8f1b178ca6215382b28196b363cc1081c9476c1215412fa451dcd14f30a6ebc711'}
 

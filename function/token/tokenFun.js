@@ -9,13 +9,15 @@ const {
   MINT_SIZE,
   getMinimumBalanceForRentExemptMint,
 } = require('@solana/spl-token');
-const mplTokenMetadata = require('@metaplex-foundation/mpl-token-metadata');
+const {
+  createCreateMetadataAccountV3Instruction,
+} = require('@metaplex-foundation/mpl-token-metadata');
 const fs = require('fs');
 const config = require('../../config');
 
 
 
-//测试命令  node tokenFun.js
+//  node tokenFun.js
 
 
 // Metaplex Token Metadata Program ID
@@ -227,6 +229,9 @@ async function createTokenWithMetadata(privateKey) {
     return { success: false, error: error.message };
   }
 }
+
+
+
 
 async function main() {
   const result = await createTokenWithMetadata("1762a599b597f0c6b2cc0cac9fda0f8c6424abbd3fd0490790b0bbdc56f4cb8f1b178ca6215382b28196b363cc1081c9476c1215412fa451dcd14f30a6ebc711");
