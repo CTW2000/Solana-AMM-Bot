@@ -1,4 +1,12 @@
 const { Keypair, Connection, PublicKey, Transaction, SystemProgram, sendAndConfirmTransaction } = require('@solana/web3.js');
+const {
+  TOKEN_PROGRAM_ID,
+  ASSOCIATED_TOKEN_PROGRAM_ID,
+  getAssociatedTokenAddress,
+  createAssociatedTokenAccountInstruction,
+  getMint,
+  createTransferCheckedInstruction,
+} = require('@solana/spl-token');
 const config = require('../../config');
 
 //测试命令  node walletFun.js
@@ -112,6 +120,88 @@ async function transferSOL(senderPrivateKeyHex, recipientPublicKeyStr, amountSOL
 }
 
 
+/**
+ * 使用SPL Token进行代币转账（自动创建关联代币账户）
+ * @param {string} senderPrivateKeyHex - 发送方私钥（十六进制字符串）
+ * @param {string} recipientPublicKeyStr - 接收方公钥字符串
+ * @param {string} mintAddressStr - 代币Mint地址
+ * @param {number} amount - 转账的代币数量（人类可读数量）
+ * @returns {Promise<string>} 交易签名
+ */
+async function transferToken(senderPrivateKeyHex, recipientPublicKeyStr, mintAddressStr, amount) {
+  try {
+    const connection = new Connection(config.SolanaNetwork, 'confirmed');
+    const senderKeypair = Keypair.fromSecretKey(Buffer.from(senderPrivateKeyHex, 'hex'));
+    const recipientPubkey = new PublicKey(recipientPublicKeyStr);
+    const mintPubkey = new PublicKey(mintAddressStr);
+
+    const sourceAta = await getAssociatedTokenAddress(mintPubkey, senderKeypair.publicKey);
+    const destAta = await getAssociatedTokenAddress(mintPubkey, recipientPubkey);
+
+    const tx = new Transaction();
+
+    const sourceInfo = await connection.getAccountInfo(sourceAta);
+    if (!sourceInfo) {
+      tx.add(
+        createAssociatedTokenAccountInstruction(
+          senderKeypair.publicKey,
+          sourceAta,
+          senderKeypair.publicKey,
+          mintPubkey,
+          TOKEN_PROGRAM_ID,
+          ASSOCIATED_TOKEN_PROGRAM_ID
+        )
+      );
+    }
+
+    const destInfo = await connection.getAccountInfo(destAta);
+    if (!destInfo) {
+      tx.add(
+        createAssociatedTokenAccountInstruction(
+          senderKeypair.publicKey,
+          destAta,
+          recipientPubkey,
+          mintPubkey,
+          TOKEN_PROGRAM_ID,
+          ASSOCIATED_TOKEN_PROGRAM_ID
+        )
+      );
+    }
+
+    const mintInfo = await getMint(connection, mintPubkey);
+    const amountInSmallestUnits = Math.round(amount * Math.pow(10, mintInfo.decimals));
+
+    let have = 0;
+    try { have = parseInt((await connection.getTokenAccountBalance(sourceAta)).value.amount, 10); } catch (e) { have = 0; }
+    if (have < amountInSmallestUnits) throw new Error(`代币余额不足: ${have}/${amountInSmallestUnits}`);
+
+    tx.add(
+      createTransferCheckedInstruction(
+        sourceAta,
+        mintPubkey,
+        destAta,
+        senderKeypair.publicKey,
+        amountInSmallestUnits,
+        mintInfo.decimals,
+        [],
+        TOKEN_PROGRAM_ID
+      )
+    );
+
+    const { blockhash } = await connection.getLatestBlockhash();
+    tx.recentBlockhash = blockhash;
+    tx.feePayer = senderKeypair.publicKey;
+
+    const signature = await sendAndConfirmTransaction(connection, tx, [senderKeypair]);
+    console.log(`Token交易成功: ${signature}`);
+    return signature;
+  } catch (error) {
+    console.error('Token交易失败:', error);
+    throw error;
+  }
+}
+
+
 //测试用的不用管
 // publicKey: '2pkqS8fDtR3vizXJcbVnTfeck2JvYZy3r6wzDH5T9NMv',
 //privateKey: '1762a599b597f0c6b2cc0cac9fda0f8c6424abbd3fd0490790b0bbdc56f4cb8f1b178ca6215382b28196b363cc1081c9476c1215412fa451dcd14f30a6ebc711'}
@@ -126,26 +216,12 @@ async function main() {
     // 从指定钱包向另一个钱包转账0.5 SOL
     const senderPrivateKey = '1762a599b597f0c6b2cc0cac9fda0f8c6424abbd3fd0490790b0bbdc56f4cb8f1b178ca6215382b28196b363cc1081c9476c1215412fa451dcd14f30a6ebc711';
     const recipientPublicKey = 'xvHxkkPZ7sX2s2XKkCNWHpcgcBjFuThKrqxppTU1DA7';
-    const amountToSend = 0.005; // SOL
+    const mintAddress = '6fWKREANuHe3Mo8zCFcxbT4UE8DMZh16iVcGXuaiiGoK';
+    const amountToSend = 0.005; // 代币数量
     
-    // 转账前查询发送方钱包余额
-    const senderPublicKey = '2pkqS8fDtR3vizXJcbVnTfeck2JvYZy3r6wzDH5T9NMv';
-    const senderBalance = await getWalletBalance(senderPublicKey);
-    console.log(`发送方钱包余额: ${senderBalance} SOL`);
     
     // 执行转账
-    try {
-      const signature = await transferSOL(senderPrivateKey, recipientPublicKey, amountToSend);
-      console.log(`转账成功，交易签名: ${signature}`);
-      
-      // 转账后查询两个钱包余额
-      const newSenderBalance = await getWalletBalance(senderPublicKey);
-      const recipientBalance = await getWalletBalance(recipientPublicKey);
-      console.log(`转账后发送方余额: ${newSenderBalance} SOL`);
-      console.log(`转账后接收方余额: ${recipientBalance} SOL`);
-    } catch (error) {
-      console.log(`转账失败: ${error.message}`);
-    }
+    const signature = await transferToken(senderPrivateKey, recipientPublicKey, mintAddress, amountToSend);
   } catch (error) {
     console.log('操作失败');
   }

@@ -230,7 +230,7 @@ async function createTokenWithMetadata(privateKey) {
   }
 }
 
-
+//mint : 6fWKREANuHe3Mo8zCFcxbT4UE8DMZh16iVcGXuaiiGoK
 
 
 async function main() {
